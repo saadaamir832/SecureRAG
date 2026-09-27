@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/context/AuthContext';
 import { LandingPage } from '@/pages/LandingPage';
 import { LoginPage, RegisterPage, ForgotPasswordPage } from '@/pages/AuthPages';
@@ -13,7 +13,7 @@ import { AdminPage } from '@/pages/AdminPage';
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -26,7 +26,7 @@ function App() {
           <Route path="/testing-lab" element={<DashboardLayout><TestingLabPage /></DashboardLayout>} />
           <Route path="/admin" element={<DashboardLayout><AdminPage /></DashboardLayout>} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </AuthProvider>
   );
 }

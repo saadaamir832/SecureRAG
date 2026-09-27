@@ -3,7 +3,10 @@ import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 
 // https://vitejs.dev/config/
+const repoName = 'SecureRAG';
+
 export default defineConfig({
+  base: process.env.GITHUB_ACTIONS ? `/${repoName}/` : './',
   plugins: [react()],
   resolve: {
     alias: {
