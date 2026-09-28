@@ -12,7 +12,7 @@ import {
   Zap,
   TrendingUp,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { hasSupabaseConfig, supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { GlassCard, Skeleton, StatusDot } from '@/components/ui';
 import type { SecurityEventRow } from '@/lib/types';
@@ -36,12 +36,20 @@ export function DashboardPage() {
 
   async function loadDashboard() {
     setLoading(true);
+
+    if (!user || !hasSupabaseConfig) {
+      setStats({ documents: 0, queries: 0, securityEvents: 0, blockedThreats: 0 });
+      setRecentEvents([]);
+      setLoading(false);
+      return;
+    }
+
     const [docRes, queryRes, eventRes, blockedRes, recentRes] = await Promise.all([
-      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('user_id', user!.id),
-      supabase.from('chat_messages').select('id', { count: 'exact', head: true }).eq('user_id', user!.id).eq('role', 'user'),
-      supabase.from('security_events').select('id', { count: 'exact', head: true }).eq('user_id', user!.id),
-      supabase.from('security_events').select('id', { count: 'exact', head: true }).eq('user_id', user!.id).eq('blocked', true),
-      supabase.from('security_events').select('*').eq('user_id', user!.id).order('created_at', { ascending: false }).limit(8),
+      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('chat_messages').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('role', 'user'),
+      supabase.from('security_events').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('security_events').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('blocked', true),
+      supabase.from('security_events').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(8),
     ]);
 
     setStats({

@@ -15,7 +15,7 @@ import {
   X,
   Sparkles,
 } from 'lucide-react';
-import { supabase, type SourceCitation } from '@/lib/supabase';
+import { hasSupabaseConfig, supabase, type SourceCitation } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { Skeleton } from '@/components/ui';
 import { detectPromptInjection } from '@/lib/security';
@@ -50,10 +50,16 @@ export function ChatPage() {
 
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true);
+    if (!user || !hasSupabaseConfig) {
+      setSessions([]);
+      setSessionsLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from('chat_sessions')
       .select('*')
-      .eq('user_id', user!.id)
+      .eq('user_id', user.id)
       .order('updated_at', { ascending: false });
     setSessions(data as ChatSession[] || []);
     setSessionsLoading(false);
@@ -65,6 +71,12 @@ export function ChatPage() {
 
   const loadMessages = useCallback(async (sessionId: string) => {
     setLoading(true);
+    if (!hasSupabaseConfig) {
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from('chat_messages')
       .select('*')
@@ -85,6 +97,18 @@ export function ChatPage() {
   }, [messages]);
 
   async function createNewSession() {
+    if (!hasSupabaseConfig) {
+      const newSession = {
+        id: `demo-session-${Date.now()}`,
+        title: 'New Conversation',
+        created_at: new Date().toISOString(),
+      } as ChatSession;
+      setSessions((prev) => [newSession, ...prev]);
+      setCurrentSession(newSession);
+      setMessages([]);
+      return;
+    }
+
     const { data } = await supabase
       .from('chat_sessions')
       .insert({ title: 'New Conversation' })
@@ -101,7 +125,9 @@ export function ChatPage() {
 
   async function deleteSession(session: ChatSession) {
     if (!confirm('Delete this conversation?')) return;
-    await supabase.from('chat_sessions').delete().eq('id', session.id);
+    if (hasSupabaseConfig) {
+      await supabase.from('chat_sessions').delete().eq('id', session.id);
+    }
     setSessions((prev) => prev.filter((s) => s.id !== session.id));
     if (currentSession?.id === session.id) {
       setCurrentSession(null);
@@ -119,6 +145,27 @@ export function ChatPage() {
     const userInput = input.trim();
     setInput('');
     setSending(true);
+
+    if (!hasSupabaseConfig) {
+      const demoResponse = `I’m running in demo mode because no Supabase backend is configured. Your message was: "${userInput}". In a live deployment, this would be checked against your secure document store and prompt-injection filters.`;
+      const demoUserMessage: ChatMessage = {
+        id: `demo-user-${Date.now()}`,
+        role: 'user',
+        content: userInput,
+        injection_detected: false,
+        created_at: new Date().toISOString(),
+      };
+      const demoAssistantMessage: ChatMessage = {
+        id: `demo-assistant-${Date.now()}`,
+        role: 'assistant',
+        content: demoResponse,
+        injection_detected: false,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, demoUserMessage, demoAssistantMessage]);
+      setSending(false);
+      return;
+    }
 
     // --- Prompt injection detection ---
     const injectionResult = detectPromptInjection(userInput);

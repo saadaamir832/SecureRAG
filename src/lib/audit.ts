@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { hasSupabaseConfig, supabase } from '@/lib/supabase';
 
 export interface SecurityEventInput {
   eventType: string;
@@ -9,6 +9,8 @@ export interface SecurityEventInput {
 }
 
 export async function logSecurityEvent(event: SecurityEventInput): Promise<void> {
+  if (!hasSupabaseConfig) return;
+
   try {
     await supabase.from('security_events').insert({
       event_type: event.eventType,
@@ -23,6 +25,8 @@ export async function logSecurityEvent(event: SecurityEventInput): Promise<void>
 }
 
 export async function logLoginAttempt(email: string, successful: boolean): Promise<void> {
+  if (!hasSupabaseConfig) return;
+
   try {
     await supabase.from('login_attempts').insert({
       email,

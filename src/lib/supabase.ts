@@ -5,10 +5,20 @@ export interface SourceCitation {
   document_id: string;
 }
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder-project.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+const envSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const envSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+export const hasSupabaseConfig = Boolean(
+  envSupabaseUrl &&
+  envSupabaseAnonKey &&
+  !envSupabaseUrl.includes('placeholder') &&
+  !envSupabaseAnonKey.includes('placeholder')
+);
+
+const supabaseUrl = hasSupabaseConfig ? envSupabaseUrl : 'https://demo-project.supabase.co';
+const supabaseAnonKey = hasSupabaseConfig ? envSupabaseAnonKey : 'demo-anon-key';
+
+if (!hasSupabaseConfig) {
   console.warn('Supabase environment variables are missing. The app is running in a static demo mode without backend connectivity.');
 }
 
