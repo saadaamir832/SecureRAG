@@ -251,14 +251,13 @@ export function ChatPage() {
     if (scoredChunks.length === 0) {
       response = "I couldn't find sufficient information in your authorized documents to answer this question. Try uploading relevant documents or rephrasing your query.";
     } else {
-      // Build a secure prompt with retrieved context
       const context = scoredChunks.map((c, i) => `[Source ${i + 1}]: ${c.content}`).join('\n\n');
 
-      // Since we don't have an external LLM API key configured, we generate
-      // a response from the retrieved context directly.
-      // The system prompt is included to show the security design.
-      // In production, this would call an LLM with SECURE_SYSTEM_PROMPT.
-      response = generateSecureResponse(userInput, context, sources);
+      response = await generateLLMResponse({
+        query: userInput,
+        context,
+        sources,
+      });
     }
 
     // Save messages
@@ -517,6 +516,43 @@ function MessageBubble({ message, onCopy, onRegenerate }: { message: ChatMessage
       </div>
     </motion.div>
   );
+}
+
+async function generateLLMResponse({
+  query,
+  context,
+  sources,
+}: {
+  query: string;
+  context: string;
+  sources: SourceCitation[];
+}): Promise<string> {
+  if (!hasSupabaseConfig) {
+    return generateSecureResponse(query, context, sources);
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-rag-response', {
+      body: {
+        query,
+        context,
+        sources,
+      },
+    });
+
+    if (error) {
+      console.warn('OpenAI edge function failed, falling back to local secure response.', error);
+      return generateSecureResponse(query, context, sources);
+    }
+
+    if (data?.answer) {
+      return String(data.answer);
+    }
+  } catch (error) {
+    console.warn('Unable to reach OpenAI edge function, falling back to local secure response.', error);
+  }
+
+  return generateSecureResponse(query, context, sources);
 }
 
 function generateSecureResponse(query: string, context: string, sources: SourceCitation[]): string {
