@@ -13,7 +13,7 @@ import {
   ShieldAlert,
   FileCheck2,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { hasSupabaseConfig, supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { GlassCard, Skeleton } from '@/components/ui';
 import { useToast } from '@/components/Toast';
@@ -34,6 +34,21 @@ interface Document {
   created_at: string;
 }
 
+const demoDocumentsKey = 'securerag_demo_documents';
+
+function readDemoDocuments(): Document[] {
+  try {
+    const raw = localStorage.getItem(demoDocumentsKey);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDemoDocuments(documents: Document[]) {
+  localStorage.setItem(demoDocumentsKey, JSON.stringify(documents));
+}
+
 export function DocumentsPage() {
   const { user } = useAuth();
   const { toasts, show, dismiss } = useToast();
@@ -47,10 +62,17 @@ export function DocumentsPage() {
 
   const loadDocuments = useCallback(async () => {
     setLoading(true);
+
+    if (!user || !hasSupabaseConfig) {
+      setDocuments(readDemoDocuments());
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('documents')
       .select('*')
-      .eq('user_id', user!.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -87,10 +109,35 @@ export function DocumentsPage() {
 
     setUploading(true);
     const secureFilename = generateSecureFilename(selectedFile.name);
-    const storagePath = `${user!.id}/${secureFilename}`;
+    const storagePath = `${user?.id ?? 'demo-user'}/${secureFilename}`;
 
     try {
-      // Upload to Supabase Storage (private bucket)
+      if (!hasSupabaseConfig) {
+        const content = selectedFile.type === 'text/plain' || selectedFile.type === 'text/markdown' ? await selectedFile.text() : null;
+        const demoDoc: Document = {
+          id: `demo-${Date.now()}`,
+          original_filename: selectedFile.name,
+          file_type: selectedFile.name.substring(selectedFile.name.lastIndexOf('.') + 1).toLowerCase(),
+          file_size: selectedFile.size,
+          chunk_count: content ? Math.ceil(content.length / 500) : 0,
+          processing_status: 'completed',
+          is_malicious: false,
+          security_flags: validationResult.flags,
+          storage_path: storagePath,
+          created_at: new Date().toISOString(),
+        };
+
+        const docs = readDemoDocuments();
+        writeDemoDocuments([demoDoc, ...docs]);
+        setDocuments([demoDoc, ...documents]);
+        show('success', `Document "${selectedFile.name}" uploaded successfully in demo mode.`);
+        setUploadModalOpen(false);
+        setSelectedFile(null);
+        setValidationResult(null);
+        setUploading(false);
+        return;
+      }
+
       const { error: storageError } = await supabase.storage
         .from('documents')
         .upload(storagePath, selectedFile, { contentType: selectedFile.type });
@@ -101,13 +148,11 @@ export function DocumentsPage() {
         return;
       }
 
-      // Read file content for text files
       let content: string | null = null;
       if (selectedFile.type === 'text/plain' || selectedFile.type === 'text/markdown') {
         content = await selectedFile.text();
       }
 
-      // Insert document record
       const { data: doc, error: dbError } = await supabase
         .from('documents')
         .insert({
@@ -131,7 +176,6 @@ export function DocumentsPage() {
         return;
       }
 
-      // If we have text content, create chunks
       if (content && doc) {
         await createChunks(doc.id, content);
       }
@@ -181,10 +225,16 @@ export function DocumentsPage() {
   async function handleDelete(doc: Document) {
     if (!confirm(`Delete "${doc.original_filename}"? This action cannot be undone.`)) return;
 
-    // Delete from storage
+    if (!hasSupabaseConfig) {
+      const nextDocs = readDemoDocuments().filter((item) => item.id !== doc.id);
+      writeDemoDocuments(nextDocs);
+      setDocuments(nextDocs);
+      show('success', 'Document deleted.');
+      return;
+    }
+
     await supabase.storage.from('documents').remove([doc.storage_path]);
 
-    // Delete from database (cascades to chunks)
     const { error } = await supabase.from('documents').delete().eq('id', doc.id);
 
     if (error) {
